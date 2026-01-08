@@ -14,7 +14,7 @@ ON DUPLICATE KEY UPDATE name=VALUES(name);
 INSERT INTO datasource (id, name, type, host, port, database_name, username, password, connection_url, status, test_status, description, creator_id, create_time, update_time) VALUES 
 (1, '生产环境MySQL数据库', 'mysql', 'mysql-data', 3306, 'product_db', 'root', 'root', 'jdbc:mysql://mysql-data:3306/product_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true', 'inactive', 'unknown', '生产环境主数据库，包含核心业务数据', 2100246635, NOW(), NOW()),
 (2, '数据仓库PostgreSQL', 'postgresql', 'postgres-data', 5432, 'data_warehouse', 'postgres', 'postgres', 'jdbc:postgresql://postgres-data:5432/data_warehouse', 'inactive', 'unknown', '数据仓库，用于数据分析和报表生成', 2100246635, NOW(), NOW()),
-(3, 'product_db', 'h2', 'nl2sql_database', 0, 'product_db', 'root', 'root', 'jdbc:h2:mem:nl2sql_database;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=true;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE', 'inactive', 'unknown', 'h2测试数据库，包含核心业务数据', 2100246635, NOW(), NOW())
+(3, 'product_db', 'h2', 'nl2sql_database', 0, 'product_db', 'root', 'root', 'jdbc:h2:file:/data/data-agent-h2/nl2sql_database;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=true;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE', 'inactive', 'unknown', 'h2测试数据库，包含核心业务数据', 2100246635, NOW(), NOW())
 ON DUPLICATE KEY UPDATE name=VALUES(name);
 
 -- 业务知识示例数据（依赖 agent）
@@ -49,3 +49,9 @@ INSERT INTO agent_datasource (id, agent_id, datasource_id, is_active, create_tim
 (3, 3, 1, 0, NOW(), NOW()),  -- 财务报表智能体使用生产环境数据库
 (4, 4, 1, 0, NOW(), NOW())  -- 库存管理智能体使用生产环境数据库
 ON DUPLICATE KEY UPDATE agent_id=VALUES(agent_id);
+
+-- 模型配置示例数据
+INSERT INTO model_config (id, provider, base_url, api_key, model_name, temperature, is_active, max_tokens, model_type, completions_path, embeddings_path, created_time, updated_time, is_deleted) VALUES
+(1, 'qwen', 'https://dashscope.aliyuncs.com/compatible-mode', 'sk-339000108bf74dcab6d69f6bb2e0a58a', 'qwen-plus', 0.00, 1, 2000, 'CHAT', NULL, NULL, NOW(), NOW(), 0),
+(2, 'qwen', 'https://dashscope.aliyuncs.com/compatible-mode', 'sk-339000108bf74dcab6d69f6bb2e0a58a', 'text-embedding-v4', 0.00, 1, 2000, 'EMBEDDING', NULL, NULL, NOW(), NOW(), 0)
+ON DUPLICATE KEY UPDATE model_name=VALUES(model_name);
