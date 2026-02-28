@@ -21,17 +21,18 @@ import com.alibaba.cloud.ai.dataagent.dto.schema.SchemaDTO;
 import org.springframework.ai.document.Document;
 
 import java.util.List;
+import java.util.Set;
 
 public interface SchemaService {
 
 	Boolean schema(Integer datasourceId, SchemaInitRequest schemaInitRequest) throws Exception;
 
-	List<Document> getTableDocumentsByDatasource(Integer datasourceId, String query);
+	List<Document> getTableDocumentsByDatasource(Integer datasourceId, List<String> tableNames, String query);
 
 	void extractDatabaseName(SchemaDTO schemaDTO, DbConfigBO dbConfig);
 
-	void buildSchemaFromDocuments(String agentId, List<Document> columnDocumentList, List<Document> tableDocuments,
-			SchemaDTO schemaDTO);
+	void buildSchemaFromDocuments(Set<String> selectedTables, List<Document> columnDocumentList,
+			List<Document> tableDocuments, SchemaDTO schemaDTO);
 
 	List<Document> getTableDocuments(Integer datasourceId, List<String> tableNames);
 

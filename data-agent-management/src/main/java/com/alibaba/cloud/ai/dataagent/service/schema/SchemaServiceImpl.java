@@ -40,7 +40,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.BatchingStrategy;
 import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
@@ -81,7 +80,7 @@ public class SchemaServiceImpl implements SchemaService {
 	private final AgentVectorStoreService agentVectorStoreService;
 
 	@Override
-	public void buildSchemaFromDocuments(String agentId, List<Document> currentColumnDocuments,
+	public void buildSchemaFromDocuments(Set<String> selectedTables, List<Document> currentColumnDocuments,
 			List<Document> tableDocuments, SchemaDTO schemaDTO) {
 
 		// 创建可变列表副本，避免不可变集合异常
@@ -99,11 +98,13 @@ public class SchemaServiceImpl implements SchemaService {
 
 		// 如果外键关系是"订单表.订单ID=订单详情表.订单ID"，那么 relatedNamesFromForeignKeys
 		// 将包含"订单表.订单ID"和"订单详情表.订单ID"
-		Set<String> relatedNamesFromForeignKeys = extractRelatedNamesFromForeignKeys(mutableTableDocuments);
+		Set<String> relatedNamesFromForeignKeys = extractRelatedNamesFromForeignKeys(mutableTableDocuments,
+				selectedTables);
 
-		// 通过外键加载缺失的表和列
+		// 通过外键加载缺失的表和列，并确保只加载selectedTables中存在的表
 		List<String> missingTables = getMissingTableNamesWithForeignKeySet(mutableTableDocuments,
 				relatedNamesFromForeignKeys);
+
 		if (!missingTables.isEmpty() && datasourceId != null) {
 			loadMissingTableDocuments(datasourceId, mutableTableDocuments, missingTables);
 			loadMissingColDocForMissingTables(datasourceId, mutableColumnDocuments, missingTables);
@@ -117,10 +118,12 @@ public class SchemaServiceImpl implements SchemaService {
 		// Finally assemble SchemaDTO
 		schemaDTO.setTable(tableList);
 
+		// 只保留两侧表名均在候选表（selectedTables）内的外键关系
 		Set<String> foreignKeys = tableDocuments.stream()
 			.map(doc -> (String) doc.getMetadata().getOrDefault("foreignKey", ""))
 			.flatMap(fk -> Arrays.stream(fk.split("、")))
 			.filter(StringUtils::isNotBlank)
+			.filter(pair -> isForeignKeyPairInCandidateTables(pair, selectedTables))
 			.collect(Collectors.toSet());
 		schemaDTO.setForeignKeys(new ArrayList<>(foreignKeys));
 	}
@@ -249,11 +252,11 @@ public class SchemaServiceImpl implements SchemaService {
 		// 串行去批写入，并行流的时候有API限速了
 		List<List<Document>> columnBatches = batchingStrategy.batch(columns);
 		for (List<Document> batch : columnBatches) {
-			agentVectorStoreService.addDocuments(datasourceId.toString(), batch);
+			agentVectorStoreService.addSchemaDocuments(datasourceId.toString(), batch);
 		}
 		List<List<Document>> tableBatches = batchingStrategy.batch(tables);
 		for (List<Document> batch : tableBatches) {
-			agentVectorStoreService.addDocuments(datasourceId.toString(), batch);
+			agentVectorStoreService.addSchemaDocuments(datasourceId.toString(), batch);
 		}
 
 	}
@@ -283,19 +286,13 @@ public class SchemaServiceImpl implements SchemaService {
 	}
 
 	@Override
-	public List<Document> getTableDocumentsByDatasource(Integer datasourceId, String query) {
+	public List<Document> getTableDocumentsByDatasource(Integer datasourceId, List<String> tableNames, String query) {
 		Assert.notNull(datasourceId, "datasourceId cannot be null");
 		int tableTopK = dataAgentProperties.getVectorStore().getTableTopkLimit();
 		double tableThreshold = dataAgentProperties.getVectorStore().getTableSimilarityThreshold();
 
-		// 构建过滤表达式
-		FilterExpressionBuilder b = new FilterExpressionBuilder();
-		List<Filter.Expression> conditions = new ArrayList<>();
-
-		conditions.add(b.eq(Constant.DATASOURCE_ID, datasourceId.toString()).build());
-		conditions.add(b.eq(DocumentMetadataConstant.VECTOR_TYPE, DocumentMetadataConstant.TABLE).build());
-
-		Filter.Expression filterExpression = DynamicFilterService.combineWithAnd(conditions);
+		Filter.Expression filterExpression = DynamicFilterService.buildFilterExpressionForSearchTables(datasourceId,
+				tableNames);
 
 		return agentVectorStoreService.getDocumentsOnlyByFilter(filterExpression, tableTopK, query, tableThreshold);
 	}
@@ -399,12 +396,17 @@ public class SchemaServiceImpl implements SchemaService {
 	}
 
 	/**
-	 * Extract related table and column names from foreign key relationships
+	 * Extract related table and column names from foreign key relationships, only
+	 * including names whose table is in the candidate set (selectedTables).
 	 * @param tableDocuments table document list
+	 * @param selectedTables candidate table names; only "tableName.columnName" whose
+	 * tableName is in this set are included. If null or empty, no filtering is applied.
 	 * @return set of related names in format "tableName.columnName"
 	 */
-	protected Set<String> extractRelatedNamesFromForeignKeys(List<Document> tableDocuments) {
+	protected Set<String> extractRelatedNamesFromForeignKeys(List<Document> tableDocuments,
+			Set<String> selectedTables) {
 		Set<String> result = new HashSet<>();
+		boolean filterBySelected = selectedTables != null && !selectedTables.isEmpty();
 
 		for (Document doc : tableDocuments) {
 			String foreignKeyStr = (String) doc.getMetadata().getOrDefault("foreignKey", "");
@@ -412,14 +414,55 @@ public class SchemaServiceImpl implements SchemaService {
 				Arrays.stream(foreignKeyStr.split("、")).forEach(pair -> {
 					String[] parts = pair.split("=");
 					if (parts.length == 2) {
-						result.add(parts[0].trim());
-						result.add(parts[1].trim());
+						String left = parts[0].trim();
+						String right = parts[1].trim();
+						if (filterBySelected) {
+							if (isTableInCandidate(left, selectedTables)) {
+								result.add(left);
+							}
+							if (isTableInCandidate(right, selectedTables)) {
+								result.add(right);
+							}
+						}
+						else {
+							result.add(left);
+							result.add(right);
+						}
 					}
 				});
 			}
 		}
 
 		return result;
+	}
+
+	/**
+	 * Check whether the table part of "tableName.columnName" (or plain tableName) is in
+	 * the candidate set.
+	 */
+	private static boolean isTableInCandidate(String tableOrTableColumn, Set<String> selectedTables) {
+		if (StringUtils.isBlank(tableOrTableColumn)) {
+			return false;
+		}
+		int dot = tableOrTableColumn.indexOf('.');
+		String tableName = dot >= 0 ? tableOrTableColumn.substring(0, dot) : tableOrTableColumn;
+		return selectedTables.contains(tableName);
+	}
+
+	/**
+	 * 判断一条外键关系字符串 "tableName.columnName=tableName.columnName" 是否应保留：仅当 selectedTables
+	 * 为空/未设置时全部保留，否则要求等号两侧的表名均在 selectedTables 中。
+	 */
+	private static boolean isForeignKeyPairInCandidateTables(String pair, Set<String> selectedTables) {
+		if (selectedTables == null || selectedTables.isEmpty()) {
+			return true;
+		}
+		String[] parts = pair.split("=", 2);
+		if (parts.length != 2) {
+			return false;
+		}
+		return isTableInCandidate(parts[0].trim(), selectedTables)
+				&& isTableInCandidate(parts[1].trim(), selectedTables);
 	}
 
 	/**

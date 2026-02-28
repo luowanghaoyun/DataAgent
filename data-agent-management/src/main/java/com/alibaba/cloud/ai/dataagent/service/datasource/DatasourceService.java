@@ -109,4 +109,9 @@ public interface DatasourceService {
 	 */
 	List<LogicalRelation> saveLogicalRelations(Integer datasourceId, List<LogicalRelation> logicalRelations);
 
+	/**
+	 * 将数据源下全部表初始化到向量库（所有智能体共享该数据源的全量向量数据）
+	 */
+	boolean initializeSchemaForDatasource(Integer datasourceId);
+
 }

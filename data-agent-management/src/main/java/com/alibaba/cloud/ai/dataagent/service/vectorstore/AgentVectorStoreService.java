@@ -48,8 +48,10 @@ public interface AgentVectorStoreService {
 	List<Document> getDocumentsOnlyByFilter(Filter.Expression filterExpression, Integer topK, String query,
 			Double similarityThreshold);
 
-	boolean hasDocuments(String agentId);
+	boolean hasDocumentsByDataSourceId(String datasourceId);
 
-	void addDocuments(String agentId, List<Document> documents);
+	void addKnowledgeDocuments(String agentId, List<Document> documents);
+
+	void addSchemaDocuments(String datasourceId, List<Document> documents);
 
 }

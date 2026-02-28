@@ -30,8 +30,10 @@ import com.alibaba.cloud.ai.dataagent.enums.ErrorCodeEnum;
 import com.alibaba.cloud.ai.dataagent.mapper.AgentDatasourceMapper;
 import com.alibaba.cloud.ai.dataagent.mapper.DatasourceMapper;
 import com.alibaba.cloud.ai.dataagent.mapper.LogicalRelationMapper;
+import com.alibaba.cloud.ai.dataagent.dto.datasource.SchemaInitRequest;
 import com.alibaba.cloud.ai.dataagent.service.datasource.DatasourceService;
 import com.alibaba.cloud.ai.dataagent.service.datasource.handler.DatasourceTypeHandler;
+import com.alibaba.cloud.ai.dataagent.service.schema.SchemaService;
 import com.alibaba.cloud.ai.dataagent.service.datasource.handler.registry.DatasourceTypeHandlerRegistry;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -63,6 +65,8 @@ public class DatasourceServiceImpl implements DatasourceService {
 	private final AccessorFactory accessorFactory;
 
 	private final DatasourceTypeHandlerRegistry datasourceTypeHandlerRegistry;
+
+	private final SchemaService schemaService;
 
 	@Override
 	public List<Datasource> getAllDatasource() {
@@ -249,6 +253,34 @@ public class DatasourceServiceImpl implements DatasourceService {
 
 		log.info("Found {} tables for datasource: {}", tableNames.size(), datasourceId);
 		return tableNames;
+	}
+
+	@Override
+	public boolean initializeSchemaForDatasource(Integer datasourceId) {
+		Datasource datasource = getDatasourceById(datasourceId);
+		if (datasource == null) {
+			throw new RuntimeException("Datasource not found with id: " + datasourceId);
+		}
+		List<String> tables;
+		try {
+			tables = getDatasourceTables(datasourceId);
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Failed to get tables for datasource: " + datasourceId, e);
+		}
+		if (tables == null || tables.isEmpty()) {
+			throw new RuntimeException("数据源下没有可用的表，无法初始化");
+		}
+		SchemaInitRequest request = new SchemaInitRequest();
+		request.setDbConfig(getDbConfig(datasource));
+		request.setTables(tables);
+		try {
+			return Boolean.TRUE.equals(schemaService.schema(datasourceId, request));
+		}
+		catch (Exception e) {
+			log.error("Failed to initialize schema for datasource: {}", datasourceId, e);
+			throw new RuntimeException("Schema初始化失败: " + e.getMessage(), e);
+		}
 	}
 
 	@Override

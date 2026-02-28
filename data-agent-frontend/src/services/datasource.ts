@@ -126,6 +126,14 @@ class DatasourceService {
     const response = await axios.get<ApiResponse<DatasourceType[]>>(`${API_BASE_URL}/types`);
     return response.data;
   }
+
+  /**
+   * 将数据源下全部表初始化到向量库（所有智能体共享该数据源的全量向量数据）
+   */
+  async initSchema(datasourceId: number): Promise<ApiResponse<null>> {
+    const response = await axios.post<ApiResponse<null>>(`${API_BASE_URL}/${datasourceId}/init`);
+    return response.data;
+  }
 }
 
 export default new DatasourceService();

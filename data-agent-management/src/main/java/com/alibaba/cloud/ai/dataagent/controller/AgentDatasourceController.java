@@ -42,48 +42,6 @@ public class AgentDatasourceController {
 
 	private final AgentDatasourceService agentDatasourceService;
 
-	/**
-	 * Initialize agent's database Schema to vector storage Corresponds to the "Initialize
-	 * Information Source" function on the frontend
-	 */
-	@PostMapping("/init")
-	public ApiResponse<?> initSchema(@PathVariable Long agentId) {
-		// 防止前端恶意请求，dto数据应该在后端获取
-		try {
-			AgentDatasource agentDatasource = agentDatasourceService.getCurrentAgentDatasource(agentId);
-			log.info("Initializing schema for agent: {}", agentId);
-
-			// Extract data source ID and table list from request
-			Integer datasourceId = agentDatasource.getDatasourceId();
-			List<String> tables = Optional.ofNullable(agentDatasource.getSelectTables()).orElse(List.of());
-
-			// Validate request parameters
-			if (datasourceId == null) {
-				throw new InvalidInputException("数据源ID不能为空");
-			}
-
-			if (tables.isEmpty()) {
-				throw new InvalidInputException("表列表不能为空");
-			}
-
-			// Execute Schema initialization
-			Boolean result = agentDatasourceService.initializeSchemaForAgentWithDatasource(agentId, datasourceId,
-					tables);
-
-			if (result) {
-				log.info("Successfully initialized schema for agent: {}, tables: {}", agentId, tables.size());
-				return ApiResponse.success("Schema初始化成功");
-			}
-			else {
-				throw new InternalServerException("Schema初始化失败");
-			}
-		}
-		catch (Exception e) {
-			log.error("Failed to initialize schema for agent: {}", agentId, e);
-			throw new InternalServerException("Schema初始化失败：%s".formatted(e.getMessage()));
-		}
-	}
-
 	/** Get list of data sources configured for agent */
 	@GetMapping
 	public ApiResponse<List<AgentDatasource>> getAgentDatasource(@PathVariable Long agentId) {

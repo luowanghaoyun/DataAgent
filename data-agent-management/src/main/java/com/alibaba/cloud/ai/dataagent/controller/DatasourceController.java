@@ -165,6 +165,30 @@ public class DatasourceController {
 	}
 
 	/**
+	 * 将数据源下全部表初始化到向量库（所有智能体共享该数据源的全量向量数据） 对应前端的「初始化信息源」能力，建议在数据源维度操作，不再按智能体+选表初始化
+	 */
+	@PostMapping("/{id}/init")
+	public ApiResponse<?> initSchema(@PathVariable Integer id) {
+		try {
+			checkDatasourceExists(id);
+			log.info("Initializing schema for datasource: {}", id);
+			boolean result = datasourceService.initializeSchemaForDatasource(id);
+			if (result) {
+				log.info("Successfully initialized schema for datasource: {}", id);
+				return ApiResponse.success("Schema初始化成功");
+			}
+			throw new InternalServerException("Schema初始化失败");
+		}
+		catch (InternalServerException e) {
+			throw e;
+		}
+		catch (Exception e) {
+			log.error("Failed to initialize schema for datasource: {}", id, e);
+			throw new InternalServerException("Schema初始化失败：" + e.getMessage());
+		}
+	}
+
+	/**
 	 * Test data source connection
 	 */
 	@PostMapping("/{id}/test")

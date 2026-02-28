@@ -18,9 +18,13 @@ package com.alibaba.cloud.ai.dataagent.service.agent;
 import com.alibaba.cloud.ai.dataagent.entity.Agent;
 import com.alibaba.cloud.ai.dataagent.entity.AgentDatasource;
 import com.alibaba.cloud.ai.dataagent.service.datasource.AgentDatasourceService;
+import com.alibaba.cloud.ai.dataagent.service.datasource.DatasourceService;
 import com.alibaba.cloud.ai.dataagent.service.vectorstore.AgentVectorStoreService;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.concurrent.ExecutorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +43,8 @@ public class AgentStartupInitialization implements ApplicationRunner, Disposable
 	private final AgentVectorStoreService agentVectorStoreService;
 
 	private final AgentDatasourceService agentDatasourceService;
+
+	private final DatasourceService datasourceService;
 
 	private final ExecutorService executorService;
 
@@ -59,7 +65,7 @@ public class AgentStartupInitialization implements ApplicationRunner, Disposable
 		}
 	}
 
-	/** Initialize all published agents */
+	/** 按数据源维度初始化：收集已发布智能体的活跃数据源，对每个数据源全表初始化一次（所有智能体共享） */
 	private void initializePublishedAgents() {
 		try {
 			List<Agent> publishedAgents = agentService.findByStatus("published");
@@ -69,28 +75,46 @@ public class AgentStartupInitialization implements ApplicationRunner, Disposable
 				return;
 			}
 
-			log.info("Found {} published agents, starting initialization...", publishedAgents.size());
+			// 收集所有已发布智能体的活跃数据源 ID（去重）
+			Set<Integer> datasourceIds = publishedAgents.stream().map(agent -> {
+				try {
+					AgentDatasource ad = agentDatasourceService.getCurrentAgentDatasource(agent.getId());
+					return ad != null ? ad.getDatasourceId() : null;
+				}
+				catch (Exception e) {
+					return null;
+				}
+			}).filter(Objects::nonNull).collect(Collectors.toSet());
+
+			if (datasourceIds.isEmpty()) {
+				log.info("No active datasources found for published agents, skipping initialization");
+				return;
+			}
+
+			log.info("Found {} distinct datasource(s) to initialize for published agents", datasourceIds.size());
 
 			int successCount = 0;
 			int failureCount = 0;
 
-			for (Agent agent : publishedAgents) {
+			for (Integer datasourceId : datasourceIds) {
 				try {
-					boolean initialized = initializeAgentDataSource(agent);
-					if (initialized) {
+					if (isDatasourceAlreadyInitialized(datasourceId)) {
+						log.info("Datasource {} already has vector data, skipping", datasourceId);
 						successCount++;
-						log.info("Successfully initialized agent: {} (ID: {})", agent.getName(), agent.getId());
+						continue;
+					}
+					boolean result = datasourceService.initializeSchemaForDatasource(datasourceId);
+					if (result) {
+						successCount++;
+						log.info("Successfully initialized schema for datasource: {}", datasourceId);
 					}
 					else {
 						failureCount++;
-						log.warn("Failed to initialize agent: {} (ID: {}) - no active datasource or tables",
-								agent.getName(), agent.getId());
 					}
 				}
 				catch (Exception e) {
 					failureCount++;
-					log.error("Error initializing agent: {} (ID: {}, reason: {})", agent.getName(), agent.getId(),
-							e.getMessage());
+					log.error("Error initializing datasource: {}, reason: {}", datasourceId, e.getMessage());
 				}
 
 				try {
@@ -102,70 +126,22 @@ public class AgentStartupInitialization implements ApplicationRunner, Disposable
 				}
 			}
 
-			log.info("Agent initialization completed. Success: {}, Failed: {}, Total: {}", successCount, failureCount,
-					publishedAgents.size());
+			log.info("Datasource schema initialization completed. Success: {}, Failed: {}, Total: {}", successCount,
+					failureCount, datasourceIds.size());
 
 		}
 		catch (Exception e) {
-			log.error("Error during published agents initialization", e);
+			log.error("Error during published agents datasource initialization", e);
 		}
 	}
 
-	/**
-	 * Initialize the data source for a single agent
-	 * @param agent The agent
-	 * @return Whether the initialization was successful
-	 */
-	private boolean initializeAgentDataSource(Agent agent) {
+	private boolean isDatasourceAlreadyInitialized(Integer datasourceId) {
 		try {
-			Long agentId = agent.getId();
-
-			boolean hasData = isAlreadyInitialized(agentId);
-
-			if (hasData) {
-				log.info("Agent {} already has vector data , skipping initialization", agentId);
-				return true;
-			}
-
-			AgentDatasource activeDatasource = agentDatasourceService.getCurrentAgentDatasource(agentId);
-
-			Integer datasourceId = activeDatasource.getDatasourceId();
-
-			List<String> tables = activeDatasource.getSelectTables();
-
-			if (tables.isEmpty()) {
-				log.warn("Datasource {} has no tables available for agent {}", datasourceId, agentId);
-				return false;
-			}
-
-			log.info("Initializing agent {} with datasource {} and {} tables", agentId, datasourceId, tables.size());
-
-			Boolean result = agentDatasourceService.initializeSchemaForAgentWithDatasource(agentId, datasourceId,
-					tables);
-
-			if (result) {
-				log.info("Successfully initialized datasource for agent {} with {} tables", agentId, tables.size());
-				return true;
-			}
-			else {
-				log.error("Failed to initialize datasource for agent {}", agentId);
-				return false;
-			}
-
+			return agentVectorStoreService.hasDocumentsByDataSourceId(String.valueOf(datasourceId));
 		}
 		catch (Exception e) {
-			log.error("Error initializing datasource for agent {}, reason: {}", agent.getId(), e.getMessage());
-			return false;
-		}
-	}
-
-	private boolean isAlreadyInitialized(Long agentId) {
-		try {
-			String agentIdStr = String.valueOf(agentId);
-			return agentVectorStoreService.hasDocuments(agentIdStr);
-		}
-		catch (Exception e) {
-			log.error("Failed to check initialization status for agent: {}, assuming not initialized", agentId, e);
+			log.error("Failed to check initialization status for datasource: {}, assuming not initialized",
+					datasourceId, e);
 			return false;
 		}
 	}

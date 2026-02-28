@@ -32,19 +32,6 @@ const BASE_URL_FUNC = (agentId: string) => `/api/agent/${agentId}/datasources`;
 
 class AgentDatasourceService {
   /**
-   * 初始化数据源Schema
-   * @param agentId 智能体ID
-   */
-  async initSchema(agentId: string): Promise<ApiResponse<null>> {
-    try {
-      const response = await axios.post<ApiResponse<null>>(`${BASE_URL_FUNC(agentId)}/init`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`初始化Schema失败: ${error}`);
-    }
-  }
-
-  /**
    * 获取智能体的数据源列表
    * @param agentId 智能体ID
    */
@@ -136,8 +123,12 @@ class AgentDatasourceService {
         dto,
       );
       return response.data;
-    } catch (error) {
-      throw new Error(`切换数据源状态失败: ${error}`);
+    } catch (error: unknown) {
+      const msg =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (error as Error)?.message ||
+        '切换数据源状态失败';
+      throw new Error(msg);
     }
   }
 

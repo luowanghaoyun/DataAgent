@@ -72,6 +72,17 @@ const routes = [
     },
   },
 
+  // 数据源管理（顶层）
+  {
+    path: '/datasource-manage',
+    name: 'DataSourceManage',
+    component: () => import('@/views/DataSourceManage.vue'),
+    meta: {
+      title: '数据源管理',
+      module: 'config',
+    },
+  },
+
   // 404页面
   {
     path: '/:pathMatch(.*)*',

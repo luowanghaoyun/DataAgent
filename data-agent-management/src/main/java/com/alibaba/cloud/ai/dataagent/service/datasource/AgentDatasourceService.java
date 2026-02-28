@@ -20,9 +20,6 @@ import java.util.List;
 
 public interface AgentDatasourceService {
 
-	/** Initialize agent's database schema using datasource */
-	Boolean initializeSchemaForAgentWithDatasource(Long agentId, Integer datasourceId, List<String> tables);
-
 	List<AgentDatasource> getAgentDatasource(Long agentId);
 
 	default AgentDatasource getCurrentAgentDatasource(Long agentId) {

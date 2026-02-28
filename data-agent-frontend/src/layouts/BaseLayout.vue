@@ -32,6 +32,10 @@
               <i class="bi bi-gear"></i>
               <span>模型配置</span>
             </div>
+            <div class="nav-item" :class="{ active: isDataSourceManagePage() }" @click="goToDataSourceManage">
+              <i class="bi bi-database"></i>
+              <span>数据源管理</span>
+            </div>
           </nav>
         </div>
       </div>
@@ -61,6 +65,10 @@
         router.push('/model-config');
       };
 
+      const goToDataSourceManage = () => {
+        router.push('/datasource-manage');
+      };
+
       const isAgentPage = () => {
         return (
           router.currentRoute.value.name === 'AgentList' ||
@@ -74,11 +82,17 @@
         return router.currentRoute.value.name === 'ModelConfig';
       };
 
+      const isDataSourceManagePage = () => {
+        return router.currentRoute.value.name === 'DataSourceManage';
+      };
+
       return {
         goToAgentList,
         goToModelConfig,
+        goToDataSourceManage,
         isAgentPage,
         isModelConfigPage,
+        isDataSourceManagePage,
       };
     },
   };

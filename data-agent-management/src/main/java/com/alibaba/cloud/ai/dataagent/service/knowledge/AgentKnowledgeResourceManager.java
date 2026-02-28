@@ -69,7 +69,7 @@ public class AgentKnowledgeResourceManager {
 
 	private void processQaKnowledge(AgentKnowledge knowledge) {
 		Document document = DocumentConverterUtil.convertQaFaqKnowledgeToDocument(knowledge);
-		agentVectorStoreService.addDocuments(knowledge.getAgentId().toString(), List.of(document));
+		agentVectorStoreService.addKnowledgeDocuments(knowledge.getAgentId().toString(), List.of(document));
 		log.info("Successfully vectorized AgentKnowledge: id={}, type={}", knowledge.getId(), knowledge.getType());
 	}
 
@@ -88,7 +88,7 @@ public class AgentKnowledgeResourceManager {
 			.convertAgentKnowledgeDocumentsWithMetadata(documents, knowledge);
 
 		// 添加到向量存储
-		agentVectorStoreService.addDocuments(knowledge.getAgentId().toString(), documentsWithMetadata);
+		agentVectorStoreService.addKnowledgeDocuments(knowledge.getAgentId().toString(), documentsWithMetadata);
 		log.info("Successfully vectorized DOCUMENT knowledge: id={}, filePath={}, documentCount={}, splitterType={}",
 				knowledge.getId(), knowledge.getFilePath(), documentsWithMetadata.size(), knowledge.getSplitterType());
 

@@ -102,8 +102,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 		return this.deleteDocumentsByMetedata(agentId, metadata);
 	}
 
-	@Override
-	public void addDocuments(String agentId, List<Document> documents) {
+	public void addKnowledgeDocuments(String agentId, List<Document> documents) {
 		Assert.notNull(agentId, "AgentId cannot be null.");
 		Assert.notEmpty(documents, "Documents cannot be empty.");
 
@@ -122,11 +121,38 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 			}
 			else {
 				// 知识库和业务术语必须包含 agentId
+				Assert.isTrue(
+						DocumentMetadataConstant.AGENT_KNOWLEDGE.equals(vectorType)
+								|| DocumentMetadataConstant.BUSINESS_TERM.equals(vectorType),
+						"Document type must be AGENT_KNOWLEDGE or BUSINESS_TERM.");
 				Assert.isTrue(document.getMetadata().containsKey(Constant.AGENT_ID),
 						"Document metadata must contain agentId.");
 				Assert.isTrue(document.getMetadata().get(Constant.AGENT_ID).equals(agentId),
 						"Document metadata agentId does not match.");
 			}
+		}
+		vectorStore.add(documents);
+	}
+
+	@Override
+	public void addSchemaDocuments(String datasourceId, List<Document> documents) {
+		Assert.notNull(datasourceId, "DatasourceId cannot be null.");
+		Assert.notEmpty(documents, "Documents cannot be empty.");
+
+		for (Document document : documents) {
+			Assert.notNull(document.getMetadata(), "Document metadata cannot be null.");
+
+			String vectorType = (String) document.getMetadata().get(DocumentMetadataConstant.VECTOR_TYPE);
+
+			// 表和列必须包含 datasourceId
+			Assert.isTrue(
+					DocumentMetadataConstant.TABLE.equals(vectorType)
+							|| DocumentMetadataConstant.COLUMN.equals(vectorType),
+					"Document type must be TABLE or COLUMN.");
+			Assert.isTrue(document.getMetadata().containsKey(Constant.DATASOURCE_ID),
+					"Document metadata must contain datasourceId for TABLE/COLUMN type.");
+			Assert.isTrue(document.getMetadata().get(Constant.DATASOURCE_ID).equals(datasourceId),
+					"Document metadata datasourceId does not match.");
 		}
 		vectorStore.add(documents);
 	}
@@ -248,11 +274,11 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 	}
 
 	@Override
-	public boolean hasDocuments(String agentId) {
+	public boolean hasDocumentsByDataSourceId(String dataSourceId) {
 		// 类似 MySQL 的 LIMIT 1,只检查是否存在文档
 		List<Document> docs = vectorStore.similaritySearch(org.springframework.ai.vectorstore.SearchRequest.builder()
 			.query(DEFAULT)// 使用默认的查询字符串，因为有的嵌入模型不支持空字符串
-			.filterExpression(buildFilterExpressionString(Map.of(Constant.AGENT_ID, agentId)))
+			.filterExpression(buildFilterExpressionString(Map.of(Constant.DATASOURCE_ID, dataSourceId)))
 			.topK(1) // 只获取1个文档
 			.similarityThreshold(0.0)
 			.build());

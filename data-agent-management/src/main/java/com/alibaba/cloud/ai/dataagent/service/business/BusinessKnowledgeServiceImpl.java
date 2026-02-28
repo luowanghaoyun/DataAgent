@@ -98,7 +98,7 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 
 		try {
 			Document document = DocumentConverterUtil.convertBusinessKnowledgeToDocument(entity);
-			agentVectorStoreService.addDocuments(entity.getAgentId().toString(), List.of(document));
+			agentVectorStoreService.addKnowledgeDocuments(entity.getAgentId().toString(), List.of(document));
 			entity.setEmbeddingStatus(EmbeddingStatus.COMPLETED);
 			entity.setErrorMsg(null);
 			businessKnowledgeMapper.updateById(entity);
@@ -162,7 +162,7 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 
 		// 添加新的向量数据
 		Document newDocument = DocumentConverterUtil.convertBusinessKnowledgeToDocument(knowledge);
-		agentVectorStoreService.addDocuments(knowledge.getAgentId().toString(), List.of(newDocument));
+		agentVectorStoreService.addKnowledgeDocuments(knowledge.getAgentId().toString(), List.of(newDocument));
 
 		log.info("Successfully updated vector store for knowledge id: {}", knowledge.getId());
 	}
@@ -181,7 +181,7 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 
 		if (businessKnowledgeMapper.logicalDelete(id, 1) <= 0) {
 			// 重新添加修复被删除的记录
-			agentVectorStoreService.addDocuments(knowledge.getAgentId().toString(),
+			agentVectorStoreService.addKnowledgeDocuments(knowledge.getAgentId().toString(),
 					List.of(DocumentConverterUtil.convertBusinessKnowledgeToDocument(knowledge)));
 			throw new RuntimeException("Failed to logically delete knowledge from database");
 		}
@@ -227,7 +227,7 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 			List<Document> documents = recalledKnowledge.stream()
 				.map(DocumentConverterUtil::convertBusinessKnowledgeToDocument)
 				.toList();
-			agentVectorStoreService.addDocuments(agentId, documents);
+			agentVectorStoreService.addKnowledgeDocuments(agentId, documents);
 		}
 	}
 

@@ -16,7 +16,8 @@
 package com.alibaba.cloud.ai.dataagent.workflow.node;
 
 import com.alibaba.cloud.ai.dataagent.dto.prompt.QueryEnhanceOutputDTO;
-import com.alibaba.cloud.ai.dataagent.mapper.AgentDatasourceMapper;
+import com.alibaba.cloud.ai.dataagent.entity.AgentDatasource;
+import com.alibaba.cloud.ai.dataagent.service.datasource.AgentDatasourceService;
 import com.alibaba.cloud.ai.graph.GraphResponse;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
@@ -56,7 +57,7 @@ public class SchemaRecallNode implements NodeAction {
 
 	private final SchemaService schemaService;
 
-	private final AgentDatasourceMapper agentDatasourceMapper;
+	private final AgentDatasourceService agentDatasourceService;
 
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws Exception {
@@ -68,7 +69,8 @@ public class SchemaRecallNode implements NodeAction {
 		String agentId = StateUtil.getStringValue(state, AGENT_ID);
 
 		// 查询 Agent 的激活数据源
-		Integer datasourceId = agentDatasourceMapper.selectActiveDatasourceIdByAgentId(Long.valueOf(agentId));
+		AgentDatasource agentDatasource = agentDatasourceService.getCurrentAgentDatasource(Long.valueOf(agentId));
+		Integer datasourceId = agentDatasource.getDatasourceId();
 
 		if (datasourceId == null) {
 			log.warn("Agent {} has no active datasource", agentId);
@@ -99,7 +101,7 @@ public class SchemaRecallNode implements NodeAction {
 
 		// Execute business logic first - recall schema information immediately
 		List<Document> tableDocuments = new ArrayList<>(
-				schemaService.getTableDocumentsByDatasource(datasourceId, input));
+				schemaService.getTableDocumentsByDatasource(datasourceId, agentDatasource.getSelectTables(), input));
 		// extract table names
 		List<String> recalledTableNames = extractTableName(tableDocuments);
 		List<Document> columnDocuments = schemaService.getColumnDocumentsByTableName(datasourceId, recalledTableNames);

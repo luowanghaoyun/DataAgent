@@ -15,15 +15,13 @@
  */
 package com.alibaba.cloud.ai.dataagent.service.datasource.impl;
 
-import com.alibaba.cloud.ai.dataagent.bo.DbConfigBO;
-import com.alibaba.cloud.ai.dataagent.dto.datasource.SchemaInitRequest;
 import com.alibaba.cloud.ai.dataagent.entity.AgentDatasource;
 import com.alibaba.cloud.ai.dataagent.entity.Datasource;
 import com.alibaba.cloud.ai.dataagent.mapper.AgentDatasourceMapper;
 import com.alibaba.cloud.ai.dataagent.mapper.AgentDatasourceTablesMapper;
 import com.alibaba.cloud.ai.dataagent.service.datasource.AgentDatasourceService;
 import com.alibaba.cloud.ai.dataagent.service.datasource.DatasourceService;
-import com.alibaba.cloud.ai.dataagent.service.schema.SchemaService;
+import com.alibaba.cloud.ai.dataagent.service.vectorstore.AgentVectorStoreService;
 import java.util.List;
 import java.util.Optional;
 import lombok.AllArgsConstructor;
@@ -39,47 +37,11 @@ public class AgentDatasourceServiceImpl implements AgentDatasourceService {
 
 	private final DatasourceService datasourceService;
 
-	private final SchemaService schemaService;
-
 	private final AgentDatasourceMapper agentDatasourceMapper;
 
 	private final AgentDatasourceTablesMapper tablesMapper;
 
-	@Override
-	public Boolean initializeSchemaForAgentWithDatasource(Long agentId, Integer datasourceId, List<String> tables) {
-		Assert.notNull(agentId, "Agent ID cannot be null");
-		Assert.notNull(datasourceId, "Datasource ID cannot be null");
-		Assert.notEmpty(tables, "Tables cannot be empty");
-		try {
-			String agentIdStr = String.valueOf(agentId);
-			log.info("Initializing schema for agent: {} with datasource: {}, tables: {}", agentIdStr, datasourceId,
-					tables);
-
-			// Get data source information
-			Datasource datasource = datasourceService.getDatasourceById(datasourceId);
-			if (datasource == null) {
-				throw new RuntimeException("Datasource not found with id: " + datasourceId);
-			}
-
-			// Create database configuration
-			DbConfigBO dbConfig = datasourceService.getDbConfig(datasource);
-
-			// Create SchemaInitRequest
-			SchemaInitRequest schemaInitRequest = new SchemaInitRequest();
-			schemaInitRequest.setDbConfig(dbConfig);
-			schemaInitRequest.setTables(tables);
-
-			log.info("Created SchemaInitRequest for agent: {}, dbConfig: {}, tables: {}", agentIdStr, dbConfig, tables);
-
-			// Call the original initialization method
-			return schemaService.schema(datasourceId, schemaInitRequest);
-
-		}
-		catch (Exception e) {
-			log.error("Failed to initialize schema for agent: {} with datasource: {}", agentId, datasourceId, e);
-			throw new RuntimeException("Failed to initialize schema for agent " + agentId + ": " + e.getMessage(), e);
-		}
-	}
+	private final AgentVectorStoreService agentVectorStoreService;
 
 	@Override
 	public List<AgentDatasource> getAgentDatasource(Long agentId) {
@@ -141,11 +103,13 @@ public class AgentDatasourceServiceImpl implements AgentDatasourceService {
 
 	@Override
 	public AgentDatasource toggleDatasourceForAgent(Long agentId, Integer datasourceId, Boolean isActive) {
-		// If enabling data source, first check if there are other enabled data sources
 		if (isActive) {
 			int activeCount = agentDatasourceMapper.countActiveByAgentIdExcluding(agentId, datasourceId);
 			if (activeCount > 0) {
 				throw new RuntimeException("同一智能体下只能启用一个数据源，请先禁用其他数据源后再启用此数据源");
+			}
+			if (!agentVectorStoreService.hasDocumentsByDataSourceId(String.valueOf(datasourceId))) {
+				throw new RuntimeException("该数据源尚未初始化向量，请前往「数据源管理」对该数据源执行「初始化向量」后再启用");
 			}
 		}
 

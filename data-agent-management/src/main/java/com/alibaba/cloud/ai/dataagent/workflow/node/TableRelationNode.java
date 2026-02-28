@@ -47,12 +47,8 @@ import com.alibaba.cloud.ai.graph.GraphResponse;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
@@ -162,9 +158,12 @@ public class TableRelationNode implements NodeAction {
 	private SchemaDTO buildInitialSchema(String agentId, List<Document> columnDocuments, List<Document> tableDocuments,
 			DbConfigBO agentDbConfig, List<String> logicalForeignKeys) {
 		SchemaDTO schemaDTO = new SchemaDTO();
+		// 获取当前 agent 激活的数据源
+		AgentDatasource agentDatasource = agentDatasourceService.getCurrentAgentDatasource(Long.valueOf(agentId));
 
 		schemaService.extractDatabaseName(schemaDTO, agentDbConfig);
-		schemaService.buildSchemaFromDocuments(agentId, columnDocuments, tableDocuments, schemaDTO);
+		schemaService.buildSchemaFromDocuments(new HashSet<>(agentDatasource.getSelectTables()), columnDocuments,
+				tableDocuments, schemaDTO);
 
 		// 将逻辑外键信息合并到 schemaDTO 的 foreignKeys 字段
 		if (logicalForeignKeys != null && !logicalForeignKeys.isEmpty()) {
